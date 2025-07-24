@@ -97,7 +97,7 @@ export default function PlatformerLogic() {
       player.y += player.verY;
       player.onGround = false;
       const leftTile = Math.floor(player.x / tileWidth);
-      const rightTile = Math.floor((player.x + player.width ) / tileWidth);
+      const rightTile = Math.floor((player.x + player.width -1) / tileWidth);
       const topTile = Math.floor(player.y / tileHeight);
       const bottomTile = Math.floor((player.y + player.height ) / tileHeight)
 
