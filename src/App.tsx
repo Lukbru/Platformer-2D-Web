@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 export default function PlatformerLogic() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+
   function loadImages(src : string) : Promise <HTMLImageElement> {
     return new Promise( (accept, reject) => {
       const img = new Image();
@@ -21,6 +22,9 @@ export default function PlatformerLogic() {
     if (!canv2d) {
       return
     }
+
+    canv2d.imageSmoothingEnabled = false;
+    const scale = 2;
     let canvasExist = canvas;
     let canvas2dExist = canv2d;
 
@@ -30,15 +34,19 @@ export default function PlatformerLogic() {
     let tileWidth = 16;
     let tileHeight = 16;
 
+    let playerRunningLeft: HTMLImageElement;
+    let playerRunningRight: HTMLImageElement;
+    let playerCurrentAnimation: HTMLImageElement;
+
     const player = {
       x: 30,
       y: 50,
       verX: 0,
       verY: 0,
       width: tileWidth,
-      height: tileHeight *2,
+      height: tileHeight,
       speed: 2,
-      jump: 5,
+      jump: 6,
       onGround: false,
     };
     const keys: Record<string, boolean> = {};
@@ -52,14 +60,18 @@ export default function PlatformerLogic() {
         return false
       }
 
-      const blocksLayer = mapData.layers.find((lay:any)=>lay.name.toLowerCase().includes('blocks') && lay.type === 'tilelayer');
+      const blocksLayer = mapData.layers.filter((lay:any)=>(lay.name.toLowerCase().includes('blocks') || lay.name.toLowerCase().includes('special block')) && lay.type === 'tilelayer');
       if (!blocksLayer){
         return false
       }
-      const index = tileX + ( tileY * blocksLayer.width );
-      const tiled = blocksLayer.data[index];
-
-      return tiled !==0;
+      for (const layer of blocksLayer){
+      const index = tileX + ( tileY * layer.width );
+      const tiled = layer.data[index];
+      if (tiled !== 0 ) {
+        return true;
+      }
+      }
+      return false;
     }
     function checkCollisionVertical(){
       player.x += player.verX;
@@ -110,7 +122,7 @@ export default function PlatformerLogic() {
         keys[e.code] = true;
         if (e.code === 'Space') {
           const now = performance.now();
-          if (player.onGround || now - lastGroundedAt < 10){
+          if (player.onGround || now - lastGroundedAt < 100){
           player.verY = -player.jump;
           player.onGround = false;
           }
@@ -125,11 +137,24 @@ export default function PlatformerLogic() {
       if (!mapData || !tilesetImage){
         return
       }
+      canvas2dExist.setTransform(1,0,0,1,0,0);
       canvas2dExist.clearRect(0,0,canvasExist.width, canvasExist.height);
-      const mapPiexelWidth = mapData.width * tileWidth;
-      const mapPiexelHeight = mapData.height * tileHeight;
-      const offsetX = (canvasExist.width - mapPiexelWidth) / 2;
-      const offsetY = (canvasExist.height - mapPiexelHeight) / 2;
+
+      const maxX = mapData.width * tileWidth - canvasExist.width / scale;
+      const maxY = mapData.height * tileHeight - canvasExist.height / scale;
+
+      const cameraX = Math.max(0, Math.min(player.x + player.width /2 - canvasExist.width / (2*scale), maxX));
+      const cameraY = Math.max(0, Math.min(player.y + player.height /2 - canvasExist.height / (2*scale), maxY));
+
+      const camX = Math.floor(cameraX);
+      const camY = Math.floor(cameraY);
+
+      canvas2dExist.setTransform(scale,0,0,scale, -camX*scale, -camY*scale);
+
+      //const mapPiexelWidth = mapData.width * tileWidth;
+      //const mapPiexelHeight = mapData.height * tileHeight;
+      //const offsetX = (canvasExist.width - mapPiexelWidth) / 2;
+      //const offsetY = (canvasExist.height - mapPiexelHeight) / 2;
 
       mapData.layers.forEach((layer:any)=>{
         if (layer.type !== 'tilelayer'){
@@ -158,8 +183,8 @@ export default function PlatformerLogic() {
             dy,
             tileWidth,
             tileHeight,
-            x + offsetX,
-            y + offsetY,
+            Math.floor(x),
+            Math.floor(y),
             tileWidth,
             tileHeight,
           );
@@ -168,23 +193,35 @@ export default function PlatformerLogic() {
 
       if (keys['ArrowLeft'] || keys['KeyA']){
         player.verX = -player.speed;
+        playerCurrentAnimation = playerRunningLeft;
       } else if (keys['ArrowRight'] || keys['KeyD']){
         player.verX = player.speed
+        playerCurrentAnimation = playerRunningRight;
       } else {
         player.verX = 0;
       }
 
+      if (!player.onGround){
       player.verY += 0.3; //gravity
       if (player.verY > 10){
         player.verY = 10
+      }}else {
+        player.verY=0;
       }
+
+      player.onGround = false;
 
       checkCollisionHorizontal();
       checkCollisionVertical();
 
-
-      canvas2dExist.fillStyle = 'red';
-      canvas2dExist.fillRect(player.x + offsetX, player.y + offsetY, player.width, player.height);
+      canvas2dExist.fillRect(player.x, player.y, player.width, player.height);
+      canvas2dExist.drawImage(
+        playerCurrentAnimation,
+        player.x,
+        player.y,
+        player.width,
+        player.height
+      )
 
       requestAnimationFrame(mainGame);
     }
@@ -197,6 +234,10 @@ export default function PlatformerLogic() {
       const rawimagePath = tileset.image;
       const imagePath = '/' + rawimagePath.split('/').pop();
       tilesetImage = await loadImages(imagePath);
+      playerRunningLeft = await loadImages('animation/running_1.png');
+      playerRunningRight = await loadImages('animation/running_2.png');
+
+      playerCurrentAnimation = playerRunningRight;
 
       checkInput();
       mainGame();
@@ -204,6 +245,8 @@ export default function PlatformerLogic() {
   }, []);
 
   return (
-    <canvas ref={canvasRef} width={800} height={800} className="border solid black" style={{imageRendering:'pixelated'}}/>
+    <div style={{display: 'flex', justifyContent: 'center', background:'grey'}}>
+    <canvas ref={canvasRef} width={800} height={720} className="border solid black" style={{imageRendering:'pixelated', width:`${600*2}px`, height:`${360*2}`}}/>
+    </div>
   );
 }
