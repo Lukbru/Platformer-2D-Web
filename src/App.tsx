@@ -97,9 +97,9 @@ export default function PlatformerLogic() {
       player.y += player.verY;
       player.onGround = false;
       const leftTile = Math.floor(player.x / tileWidth);
-      const rightTile = Math.floor((player.x + player.width -1) / tileWidth);
+      const rightTile = Math.floor((player.x + player.width ) / tileWidth);
       const topTile = Math.floor(player.y / tileHeight);
-      const bottomTile = Math.floor((player.y + player.height -1) / tileHeight)
+      const bottomTile = Math.floor((player.y + player.height ) / tileHeight)
 
       if (player.verY > 0) {
         for ( let tilesX = leftTile; tilesX <= rightTile; tilesX++){
@@ -137,6 +137,7 @@ export default function PlatformerLogic() {
       if (!mapData || !tilesetImage){
         return
       }
+      
       canvas2dExist.setTransform(1,0,0,1,0,0);
       canvas2dExist.clearRect(0,0,canvasExist.width, canvasExist.height);
 
@@ -209,10 +210,10 @@ export default function PlatformerLogic() {
         player.verY=0;
       }
 
-      player.onGround = false;
-
       checkCollisionHorizontal();
       checkCollisionVertical();
+
+      player.onGround = false;
 
       canvas2dExist.fillRect(player.x, player.y, player.width, player.height);
       canvas2dExist.drawImage(
