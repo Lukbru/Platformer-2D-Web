@@ -1,8 +1,36 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function PlatformerLogic() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [ isGameOver, setIsGameOver ] = useState(false);
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const resetCooldown = useRef(false);
+  
+  const player = useRef({
+      x: 90,
+      y: 500,
+      verX: 0,
+      verY: 0,
+      width: 16,
+      height: 16,
+      speed: 1.1,
+      jump: 5,
+      onGround: false,
+  });
+
+  function resetPlayer(){
+    Object.assign(player.current, {
+        x: 90,
+      y: 500,
+      verX: 0,
+      verY: 0,
+      width: 16,
+      height: 16,
+      speed: 1.1,
+      jump: 5,
+      onGround: false,
+    })
+  }
 
   function loadImages(src : string) : Promise <HTMLImageElement> {
     return new Promise( (accept, reject) => {
@@ -38,17 +66,6 @@ export default function PlatformerLogic() {
     let playerRunningRight: HTMLImageElement;
     let playerCurrentAnimation: HTMLImageElement;
 
-    const player = {
-      x: 30,
-      y: 50,
-      verX: 0,
-      verY: 0,
-      width: tileWidth,
-      height: tileHeight,
-      speed: 2,
-      jump: 6,
-      onGround: false,
-    };
     const keys: Record<string, boolean> = {};
     let lastGroundedAt = 0;
 
@@ -74,69 +91,89 @@ export default function PlatformerLogic() {
       return false;
     }
     function checkCollisionVertical(){
-      player.x += player.verX;
-      const leftTile = Math.floor(player.x / tileWidth);
-      const rightTile = Math.floor((player.x + player.width -1) / tileWidth);
-      const topTile = Math.floor(player.y / tileHeight);
-      const bottomTile = Math.floor((player.y + player.height -1) / tileHeight)
+      const p = player.current
+      p.x += p.verX;
+      const leftTile = Math.floor(p.x / tileWidth);
+      const rightTile = Math.floor((p.x + p.width -1) / tileWidth);
+      const topTile = Math.floor(p.y / tileHeight);
+      const bottomTile = Math.floor((p.y + p.height -1) / tileHeight)
 
-       if (player.verX > 0) {
+       if (p.verX > 0) {
         for ( let tilesY = topTile; tilesY <= bottomTile; tilesY++){
           if (isSolidTile(rightTile, tilesY)){
-            player.x = rightTile * tileWidth - player.width;
-            player.verX = 0;
+            p.x = rightTile * tileWidth - p.width;
+            p.verX = 0;
           }}}
-      else if (player.verX < 0){
+      else if (p.verX < 0){
         for ( let tilesY = topTile; tilesY <= bottomTile; tilesY++){
           if (isSolidTile(leftTile, tilesY)){
-            player.x = ( leftTile + 1 ) * tileWidth;
-            player.verX = 0;
+            p.x = ( leftTile + 1 ) * tileWidth;
+            p.verX = 0;
           }}}
     }
     function checkCollisionHorizontal(){
-      player.y += player.verY;
-      player.onGround = false;
-      const leftTile = Math.floor(player.x / tileWidth);
-      const rightTile = Math.floor((player.x + player.width -1) / tileWidth);
-      const topTile = Math.floor(player.y / tileHeight);
-      const bottomTile = Math.floor((player.y + player.height ) / tileHeight)
+      const p = player.current;
+      p.y += p.verY;
+      p.onGround = false;
+      const leftTile = Math.floor(p.x / tileWidth);
+      const rightTile = Math.floor((p.x + p.width -1) / tileWidth);
+      const topTile = Math.floor(p.y / tileHeight);
+      const bottomTile = Math.floor((p.y + p.height ) / tileHeight)
 
-      if (player.verY > 0) {
+      if (p.verY > 0) {
         for ( let tilesX = leftTile; tilesX <= rightTile; tilesX++){
           if (isSolidTile(tilesX, bottomTile)){
-            player.y = bottomTile * tileHeight - player.height;
-            player.verY = 0;
-            player.onGround = true;
+            p.y = bottomTile * tileHeight - p.height;
+            p.verY = 0;
+            p.onGround = true;
             lastGroundedAt = performance.now();
           }}}
-      else if (player.verY < 0) {
+      else if (p.verY < 0) {
         for ( let tilesX = leftTile; tilesX <= rightTile; tilesX++){
           if (isSolidTile(tilesX, topTile)){
-            player.y = ( topTile + 1 ) * tileHeight;
-            player.verY = 0;
+            p.y = ( topTile + 1 ) * tileHeight;
+            p.verY = 0;
           }}}
     }
 
     function checkInput() {
       window.addEventListener('keydown', (e) => {
         keys[e.code] = true;
-        if (e.code === 'Space') {
+      if (e.code === 'Space') {
+          const p = player.current;
           const now = performance.now();
-          if (player.onGround || now - lastGroundedAt < 100){
-          player.verY = -player.jump;
-          player.onGround = false;
+          if (p.onGround || now - lastGroundedAt < 100){
+          p.verY = -p.jump;
+          p.onGround = false;
           }
           e.preventDefault();
         }
-      });
+
+      if (e.code === 'KeyR' && !resetCooldown.current){
+        resetPlayer();
+        setIsGameOver(false);
+        resetCooldown.current = true;
+        setTimeout(()=>{
+          resetCooldown.current = false
+        }, 1000)
+      }
+    });
+
       window.addEventListener('keyup', (e) => {
         keys[e.code] = false;
       });
     }
-    function mainGame(){
+
+    let lastFPS = performance.now();
+
+    function mainGame(time = performance.now()){
       if (!mapData || !tilesetImage){
         return
       }
+      const p = player.current;
+
+      const delta = (time - lastFPS) / 16.67;
+      lastFPS = time;
       
       canvas2dExist.setTransform(1,0,0,1,0,0);
       canvas2dExist.clearRect(0,0,canvasExist.width, canvasExist.height);
@@ -144,8 +181,8 @@ export default function PlatformerLogic() {
       const maxX = mapData.width * tileWidth - canvasExist.width / scale;
       const maxY = mapData.height * tileHeight - canvasExist.height / scale;
 
-      const cameraX = Math.max(0, Math.min(player.x + player.width /2 - canvasExist.width / (2*scale), maxX));
-      const cameraY = Math.max(0, Math.min(player.y + player.height /2 - canvasExist.height / (2*scale), maxY));
+      const cameraX = Math.max(0, Math.min(p.x + p.width /2 - canvasExist.width / (2*scale), maxX));
+      const cameraY = Math.max(0, Math.min(p.y + p.height /2 - canvasExist.height / (2*scale), maxY));
 
       const camX = Math.floor(cameraX);
       const camY = Math.floor(cameraY);
@@ -193,36 +230,39 @@ export default function PlatformerLogic() {
       });
 
       if (keys['ArrowLeft'] || keys['KeyA']){
-        player.verX = -player.speed;
+        p.verX = -p.speed*delta;
         playerCurrentAnimation = playerRunningLeft;
       } else if (keys['ArrowRight'] || keys['KeyD']){
-        player.verX = player.speed
+        p.verX = p.speed*delta;
         playerCurrentAnimation = playerRunningRight;
       } else {
-        player.verX = 0;
+        p.verX = 0;
       }
-
-      if (!player.onGround){
-      player.verY += 0.3; //gravity
-      if (player.verY > 10){
-        player.verY = 10
+      
+      if (!p.onGround){
+      p.verY += 0.2*delta; //gravity
+      if (p.verY > 10){
+        p.verY = 10
       }}else {
-        player.verY=0;
+        p.verY=0;
       }
 
       checkCollisionHorizontal();
       checkCollisionVertical();
 
-      player.onGround = false;
+      if (p.y > (mapData.height*tileHeight)){
+        setIsGameOver(true);
+      }
 
-      canvas2dExist.fillRect(player.x, player.y, player.width, player.height);
-      canvas2dExist.drawImage(
-        playerCurrentAnimation,
-        player.x,
-        player.y,
-        player.width,
-        player.height
-      )
+      if (!canv2d){
+        return
+      }
+
+      if (!isGameOver){
+        canv2d.fillRect(p.x,p.y,p.width,p.height);
+        canv2d.drawImage(playerCurrentAnimation,p.x,p.y,p.width,p.height)
+      }
+
 
       requestAnimationFrame(mainGame);
     }
@@ -243,11 +283,18 @@ export default function PlatformerLogic() {
       checkInput();
       mainGame();
     }).catch((error)=>{console.error('Failed to load map', error)});
+    
   }, []);
 
   return (
     <div style={{display: 'flex', justifyContent: 'center', background:'grey'}}>
     <canvas ref={canvasRef} width={800} height={720} className="border solid black" style={{imageRendering:'pixelated', width:`${600*2}px`, height:`${360*2}`}}/>
+    {isGameOver && (
+      <div style={{ position:'absolute',background:'rgba(0,0,0,0.7)', color:'white', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', top:0,left:0,right:0,bottom:0}}>
+        <h1 style={{fontSize:'48px'}}>Game Over</h1>
+        <p style={{fontSize:'24px'}}>Press R to Restart</p>
+      </div>
+    )}
     </div>
   );
 }
